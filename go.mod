@@ -1,4 +1,4 @@
-module ruisIpfs
+module github.com/mgr9525/ruis-ipfs
 
 go 1.14
 
@@ -12,6 +12,7 @@ require (
 	github.com/ipfs/go-log v1.0.4
 	github.com/ipfs/go-metrics-prometheus v0.0.2
 	github.com/jbenet/goprocess v0.1.4
+	github.com/libp2p/go-libp2p-core v0.5.3
 	github.com/libp2p/go-libp2p-loggables v0.1.0
 	github.com/libp2p/go-socket-activation v0.0.2
 	github.com/multiformats/go-multiaddr v0.2.1
