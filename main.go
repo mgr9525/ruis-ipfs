@@ -28,7 +28,6 @@ import (
 	config "github.com/ipfs/go-ipfs-config"
 	u "github.com/ipfs/go-ipfs-util"
 	logging "github.com/ipfs/go-log"
-	loggables "github.com/libp2p/go-libp2p-loggables"
 	ma "github.com/multiformats/go-multiaddr"
 	madns "github.com/multiformats/go-multiaddr-dns"
 	manet "github.com/multiformats/go-multiaddr-net"
@@ -72,9 +71,8 @@ func loadPlugins(repoPath string) (*loader.PluginLoader, error) {
 	os.Exit(mainRet())
 }*/
 
-func MainRet(cmdline []string) int {
+func MainRet(ctx context.Context, cmdline []string) int {
 	rand.Seed(time.Now().UnixNano())
-	ctx := logging.ContextWithLoggable(context.Background(), loggables.Uuid("session"))
 	var err error
 
 	// we'll call this local helper to output errors.
@@ -90,8 +88,8 @@ func MainRet(cmdline []string) int {
 	}
 	defer stopFunc() // to be executed as late as possible
 
-	intrh, ctx := util.SetupInterruptHandler(ctx)
-	defer intrh.Close()
+	//intrh, ctx := util.SetupInterruptHandler(ctx)
+	//defer intrh.Close()
 
 	// Handle `ipfs version` or `ipfs help`
 
