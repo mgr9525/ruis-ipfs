@@ -10,8 +10,12 @@ var (
 	IpfsId       string
 	IpfsKey      string
 	IpfsBoots    []string
-	daemonReq    *cmds.Request
-	daemonCmds   *commands.Context
+
+	IpfsStorageMax         string
+	IpfsStorageGCWatermark int64
+
+	daemonReq  *cmds.Request
+	daemonCmds *commands.Context
 
 	HttpErr chan error
 )

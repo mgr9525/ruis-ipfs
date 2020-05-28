@@ -155,6 +155,12 @@ func doInit(out io.Writer, repoRoot string, empty bool, nBitsForKeypair int, con
 	}
 
 	conf.Datastore.StorageMax = "5G"
+	if IpfsStorageMax != "" {
+		conf.Datastore.StorageMax = IpfsStorageMax
+	}
+	if IpfsStorageGCWatermark > 0 {
+		conf.Datastore.StorageGCWatermark = IpfsStorageGCWatermark
+	}
 	if IpfsBoots != nil {
 		conf.Bootstrap = IpfsBoots
 	}
