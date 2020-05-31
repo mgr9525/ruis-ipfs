@@ -21,4 +21,3 @@ require (
 	github.com/prometheus/client_golang v1.5.1
 )
 
-replace github.com/ipfs/go-bitswap => github.com/mgr9525/go-bitswap v0.2.4-0.20200521125357-4c7a178d5709
