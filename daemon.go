@@ -31,9 +31,10 @@ import (
 
 	cmds "github.com/ipfs/go-ipfs-cmds"
 	mprome "github.com/ipfs/go-metrics-prometheus"
+	options "github.com/ipfs/interface-go-ipfs-core/options"
 	goprocess "github.com/jbenet/goprocess"
 	ma "github.com/multiformats/go-multiaddr"
-	manet "github.com/multiformats/go-multiaddr-net"
+	manet "github.com/multiformats/go-multiaddr/net"
 	prometheus "github.com/prometheus/client_golang/prometheus"
 	promauto "github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -174,13 +175,15 @@ Headers.
 		cmds.BoolOption(migrateKwd, "If true, assume yes at the migrate prompt. If false, assume no."),
 		cmds.BoolOption(enablePubSubKwd, "Instantiate the ipfs daemon with the experimental pubsub feature enabled."),
 		cmds.BoolOption(enableIPNSPubSubKwd, "Enable IPNS record distribution through pubsub; enables pubsub."),
-		cmds.BoolOption(enableMultiplexKwd, "Add the experimental 'go-multiplex' stream muxer to libp2p on construction.").WithDefault(true),
+		cmds.BoolOption(enableMultiplexKwd, "DEPRECATED"),
 
 		// TODO: add way to override addresses. tricky part: updating the config if also --init.
 		// cmds.StringOption(apiAddrKwd, "Address for the daemon rpc API (overrides config)"),
 		// cmds.StringOption(swarmAddrKwd, "Address for the swarm socket (overrides config)"),
 	},
 	Subcommands: map[string]*cmds.Command{},
+	NoRemote:    true,
+	Extra:       commands.CreateCmdExtras(commands.SetDoesNotUseConfigAsInput(true)),
 	Run:         daemonFunc,
 }
 
@@ -247,7 +250,14 @@ func daemonFunc(req *cmds.Request, re cmds.ResponseEmitter, env cmds.Environment
 			}
 		}
 
-		if err = doInit(os.Stdout, cctx.ConfigRoot, false, nBitsForKeypairDefault, profiles, conf); err != nil {
+		identity, err := config.CreateIdentity(os.Stdout, []options.KeyGenerateOption{
+			options.Key.Type(algorithmDefault),
+		})
+		if err != nil {
+			return err
+		}
+
+		if err = doInit(os.Stdout, cctx.ConfigRoot, false, &identity, profiles, conf); err != nil {
 			return err
 		}
 	}
@@ -263,8 +273,7 @@ func daemonFunc(req *cmds.Request, re cmds.ResponseEmitter, env cmds.Environment
 		fmt.Println("Found outdated fs-repo, migrations need to be run.")
 
 		if !found {
-			domigrate = true
-			//domigrate = YesNoPrompt("Run migrations now? [y/N]")
+			domigrate = YesNoPrompt("Run migrations now? [y/N]")
 		}
 
 		if !domigrate {
@@ -297,7 +306,10 @@ func daemonFunc(req *cmds.Request, re cmds.ResponseEmitter, env cmds.Environment
 	offline, _ := req.Options[offlineKwd].(bool)
 	ipnsps, _ := req.Options[enableIPNSPubSubKwd].(bool)
 	pubsub, _ := req.Options[enablePubSubKwd].(bool)
-	mplex, _ := req.Options[enableMultiplexKwd].(bool)
+	if _, hasMplex := req.Options[enableMultiplexKwd]; hasMplex {
+		log.Errorf("The mplex multiplexer has been enabled by default and the experimental %s flag has been removed.")
+		log.Errorf("To disable this multiplexer, please configure `Swarm.Transports.Multiplexers'.")
+	}
 
 	// Start assembling node config
 	ncfg := &core.BuildCfg{
@@ -308,7 +320,6 @@ func daemonFunc(req *cmds.Request, re cmds.ResponseEmitter, env cmds.Environment
 		ExtraOpts: map[string]bool{
 			"pubsub": pubsub,
 			"ipnsps": ipnsps,
-			"mplex":  mplex,
 		},
 		//TODO(Kubuxu): refactor Online vs Offline by adding Permanent vs Ephemeral
 	}
@@ -426,8 +437,6 @@ func daemonFunc(req *cmds.Request, re cmds.ResponseEmitter, env cmds.Environment
 	fmt.Printf("Daemon is ready\n")
 	notifyReady()
 
-	daemonReq = req
-	daemonCmds = cctx
 	// Give the user some immediate feedback when they hit C-c
 	go func() {
 		<-req.Context.Done()
@@ -439,7 +448,7 @@ func daemonFunc(req *cmds.Request, re cmds.ResponseEmitter, env cmds.Environment
 	// collect long-running errors and block for shutdown
 	// TODO(cryptix): our fuse currently doesn't follow this pattern for graceful shutdown
 	var errs error
-	for err := range merge(HttpErr, nil, gcErrc) {
+	for err := range merge(RuisErr, gcErrc) {
 		if err != nil {
 			errs = multierror.Append(errs, err)
 		}

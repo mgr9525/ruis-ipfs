@@ -1,28 +1,27 @@
 package ruisIpfs
 
 import (
-	cmds "github.com/ipfs/go-ipfs-cmds"
-	"github.com/ipfs/go-ipfs/commands"
+	"github.com/ipfs/go-ipfs/core"
+	"github.com/ipfs/go-ipfs/core/coreapi"
+	coreiface "github.com/ipfs/interface-go-ipfs-core"
 )
 
 var (
-	IpfsRepoPath = `D:\tmp\ipfs`
-	IpfsId       string
-	IpfsKey      string
-	IpfsBoots    []string
+	nodeInstance *core.IpfsNode
 
-	IpfsStorageMax         string
-	IpfsStorageGCWatermark int64
+	RuisErr      chan error
+	RuisRepoPath = `D:\tmp\ipfs`
+	RuisPeerId   string
+	RuisKey      string
+	RuisBoots    []string
 
-	daemonReq  *cmds.Request
-	daemonCmds *commands.Context
-
-	HttpErr chan error
+	RuisStorageMax         string
+	RuisStorageGCWatermark int64
 )
 
-func GetDaemonReq() *cmds.Request {
-	return daemonReq
+func NodeInstance() *core.IpfsNode {
+	return nodeInstance
 }
-func GetDaemonCmd() *commands.Context {
-	return daemonCmds
+func GetApi() (coreiface.CoreAPI, error) {
+	return coreapi.NewCoreAPI(nodeInstance)
 }

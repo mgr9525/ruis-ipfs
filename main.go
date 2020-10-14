@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"runtime/pprof"
-	"strings"
 	"time"
 
 	util "github.com/ipfs/go-ipfs/cmd/ipfs/util"
@@ -30,7 +29,7 @@ import (
 	logging "github.com/ipfs/go-log"
 	ma "github.com/multiformats/go-multiaddr"
 	madns "github.com/multiformats/go-multiaddr-dns"
-	manet "github.com/multiformats/go-multiaddr-net"
+	manet "github.com/multiformats/go-multiaddr/net"
 )
 
 // log is the command logger
@@ -67,11 +66,11 @@ func loadPlugins(repoPath string) (*loader.PluginLoader, error) {
 // - run the command invocation
 // - output the response
 // - if anything fails, print error, maybe with help
-/*func main() {
-	os.Exit(mainRet())
-}*/
+//func main() {
+//	os.Exit(mainRet())
+//}
 
-func MainRet(ctx context.Context, cmdline []string) int {
+func MainRet(ctx context.Context, args []string) int {
 	rand.Seed(time.Now().UnixNano())
 	var err error
 
@@ -88,23 +87,44 @@ func MainRet(ctx context.Context, cmdline []string) int {
 	}
 	defer stopFunc() // to be executed as late as possible
 
-	//intrh, ctx := util.SetupInterruptHandler(ctx)
-	//defer intrh.Close()
+	intrh, ctx := util.SetupInterruptHandler(ctx)
+	defer intrh.Close()
 
 	// Handle `ipfs version` or `ipfs help`
+	if len(os.Args) > 1 {
+		// Handle `ipfs --version'
+		if os.Args[1] == "--version" {
+			os.Args[1] = "version"
+		}
+
+		//Handle `ipfs help` and `ipfs help <sub-command>`
+		if os.Args[1] == "help" {
+			if len(os.Args) > 2 {
+				os.Args = append(os.Args[:1], os.Args[2:]...)
+				// Handle `ipfs help --help`
+				// append `--help`,when the command is not `ipfs help --help`
+				if os.Args[1] != "--help" {
+					os.Args = append(os.Args, "--help")
+				}
+			} else {
+				os.Args[1] = "--help"
+			}
+		}
+	} else if insideGUI() { // if no args were passed, and we're in a GUI environment
+		// launch the daemon instead of launching a ghost window
+		os.Args = append(os.Args, "daemon", "--init")
+	}
 
 	// output depends on executable name passed in os.Args
 	// so we need to make sure it's stable
-	cmdline[0] = "ipfs"
+	args[0] = "ipfs"
 
 	buildEnv := func(ctx context.Context, req *cmds.Request) (cmds.Environment, error) {
 		checkDebug(req)
-		/*repoPath, err := getRepoPath(req)
+		repoPath, err := getRepoPath(req)
 		if err != nil {
 			return nil, err
-		}*/
-		repoPath := IpfsRepoPath
-		println("config path is %s", repoPath)
+		}
 		log.Debugf("config path is %s", repoPath)
 
 		plugins, err := loadPlugins(repoPath)
@@ -143,7 +163,7 @@ func MainRet(ctx context.Context, cmdline []string) int {
 		}, nil
 	}
 
-	err = cli.Run(ctx, Root, cmdline, os.Stdin, os.Stdout, os.Stderr, buildEnv, makeExecutor)
+	err = cli.Run(ctx, Root, args, os.Stdin, os.Stdout, os.Stderr, buildEnv, makeExecutor)
 	if err != nil {
 		return 1
 	}
@@ -179,16 +199,17 @@ func apiAddrOption(req *cmds.Request) (ma.Multiaddr, error) {
 func makeExecutor(req *cmds.Request, env interface{}) (cmds.Executor, error) {
 	exe := cmds.NewExecutor(req.Root)
 	cctx := env.(*oldcmds.Context)
-	details := commandDetails(req.Path)
 
 	// Check if the command is disabled.
-	if details.cannotRunOnClient && details.cannotRunOnDaemon {
+	if req.Command.NoLocal && req.Command.NoRemote {
 		return nil, fmt.Errorf("command disabled: %v", req.Path)
 	}
 
 	// Can we just run this locally?
-	if !details.cannotRunOnClient && details.doesNotUseRepo {
-		return exe, nil
+	if !req.Command.NoLocal {
+		if doesNotUseRepo, ok := corecmds.GetDoesNotUseRepo(req.Command.Extra); doesNotUseRepo && ok {
+			return exe, nil
+		}
 	}
 
 	// Get the API option from the commandline.
@@ -202,7 +223,7 @@ func makeExecutor(req *cmds.Request, env interface{}) (cmds.Executor, error) {
 	daemonRequested := apiAddr != nil && req.Command != daemonCmd
 
 	// Run this on the client if required.
-	if details.cannotRunOnDaemon || req.Command.External {
+	if req.Command.NoRemote {
 		if daemonRequested {
 			// User requested that the command be run on the daemon but we can't.
 			// NOTE: We drop this check for the `ipfs daemon` command.
@@ -224,7 +245,7 @@ func makeExecutor(req *cmds.Request, env interface{}) (cmds.Executor, error) {
 
 	// Still no api specified? Run it on the client or fail.
 	if apiAddr == nil {
-		if details.cannotRunOnClient {
+		if req.Command.NoLocal {
 			return nil, fmt.Errorf("command must be run on the daemon: %v", req.Path)
 		}
 		return exe, nil
@@ -270,23 +291,10 @@ func makeExecutor(req *cmds.Request, env interface{}) (cmds.Executor, error) {
 	return cmdhttp.NewClient(host, opts...), nil
 }
 
-// commandDetails returns a command's details for the command given by |path|.
-func commandDetails(path []string) cmdDetails {
-	if len(path) == 0 {
-		// special case root command
-		return cmdDetails{doesNotUseRepo: true}
-	}
-	var details cmdDetails
-	// find the last command in path that has a cmdDetailsMap entry
-	for i := range path {
-		if cmdDetails, found := cmdDetailsMap[strings.Join(path[:i+1], "/")]; found {
-			details = cmdDetails
-		}
-	}
-	return details
-}
-
 func getRepoPath(req *cmds.Request) (string, error) {
+	if RuisRepoPath != "" {
+		return RuisRepoPath, nil
+	}
 	repoOpt, found := req.Options["config"].(string)
 	if found && repoOpt != "" {
 		return repoOpt, nil
