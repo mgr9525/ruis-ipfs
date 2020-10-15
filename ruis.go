@@ -19,7 +19,7 @@ var (
 	RuisStorageGCWatermark int64
 )
 
-func NodeInstance() *core.IpfsNode {
+func GetNode() *core.IpfsNode {
 	return nodeInstance
 }
 func GetApi() (coreiface.CoreAPI, error) {
