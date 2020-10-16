@@ -438,12 +438,12 @@ func daemonFunc(req *cmds.Request, re cmds.ResponseEmitter, env cmds.Environment
 	notifyReady()
 	nodeInstance = node
 	// Give the user some immediate feedback when they hit C-c
-	/*go func() {
+	go func() {
 		<-req.Context.Done()
 		notifyStopping()
 		fmt.Println("Received interrupt signal, shutting down...")
 		fmt.Println("(Hit ctrl-c again to force-shutdown the daemon.)")
-	}()*/
+	}()
 
 	// collect long-running errors and block for shutdown
 	// TODO(cryptix): our fuse currently doesn't follow this pattern for graceful shutdown
