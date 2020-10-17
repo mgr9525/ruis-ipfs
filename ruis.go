@@ -10,7 +10,7 @@ var (
 	nodeInstance *core.IpfsNode
 
 	RuisErr      chan error
-	RuisRepoPath = `D:\tmp\ipfs`
+	RuisRepoPath = ""
 	RuisPeerId   string
 	RuisKey      string
 	RuisBoots    []string
